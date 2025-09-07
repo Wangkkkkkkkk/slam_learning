@@ -149,12 +149,9 @@ y_arc = R * np.sin(theta)
 gt_x = np.concatenate([x_line, x_arc[1:]])
 gt_y = np.concatenate([y_line, y_arc[1:]])
 
-
-
 car = np.array(car_position)
 est = np.array(x_list[1:])
 plt.figure()
-plt.plot(car[:, 0], car[:, 1], '-', label='measure', color='red')
 plt.plot(est[:, 0], est[:, 3], '-', label='estimate', color='blue')
 plt.plot(gt_x, gt_y, '-', label='true trajectory', color='green', linewidth=2)
 plt.axis('equal')
