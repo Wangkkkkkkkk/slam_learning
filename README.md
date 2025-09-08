@@ -5,19 +5,19 @@ KF_position.py scene:
 result:
 ![KF Result](asset/KF_position.png)
 
-## Extended Falman Filter
+## Extended Kalman Filter
 EKF_position.py scene:
 ![CAR Position](asset/lidar_measure_position.png)
 result:
 ![EKF Result](asset/EKF_position.png)
 
-## Unsented Falman Filter
+## Unsented Kalman Filter
 EKF_position.py scene:
 ![CAR Position](asset/lidar_measure_position.png)
 result:
 ![UKF Result](asset/UKF_position.png)
 
-## Iterated Falman Filter
+## Iterated Kalman Filter
 EKF_position.py scene:
 ![CAR Position](asset/lidar_measure_position.png)
 result:
