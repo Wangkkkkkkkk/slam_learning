@@ -62,51 +62,62 @@ MTK::get_cov<process_noise_ikfom>::type process_noise_cov()
 	return cov;
 }
 
+// 计算状态转移矩阵f
 //double L_offset_to_I[3] = {0.04165, 0.02326, -0.0284}; // Avia 
 //vect3 Lidar_offset_to_IMU(L_offset_to_I, 3);
 Eigen::Matrix<double, 24, 1> get_f(state_ikfom &s, const input_ikfom &in)
 {
 	Eigen::Matrix<double, 24, 1> res = Eigen::Matrix<double, 24, 1>::Zero();
 	vect3 omega;
-	in.gyro.boxminus(omega, s.bg);
-	vect3 a_inertial = s.rot * (in.acc-s.ba); 
+	in.gyro.boxminus(omega, s.bg);  // omega = gyro - bg
+	vect3 a_inertial = s.rot * (in.acc-s.ba);  // a_inertial = R * (acc - ba)
 	for(int i = 0; i < 3; i++ ){
-		res(i) = s.vel[i];
-		res(i + 3) =  omega[i]; 
-		res(i + 12) = a_inertial[i] + s.grav[i]; 
+		res(i) = s.vel[i];  // 速度
+		res(i + 3) =  omega[i];  // 角速度
+		// res(i + 6) = s.offset_T_L_I[i];  // 跳过了lidar到imu的tf
+		// res(i + 9) = s.offset_R_L_I[i];
+		res(i + 12) = a_inertial[i] + s.grav[i];  // 加速度
+		// res(i + 15) = bg_dot;
+		// res(i + 18) = ba_dot;
+		// res(i + 21) = grav_dot;
 	}
 	return res;
 }
 
+// 计算状态转移矩阵f的雅克比矩阵
 Eigen::Matrix<double, 24, 23> df_dx(state_ikfom &s, const input_ikfom &in)
 {
 	Eigen::Matrix<double, 24, 23> cov = Eigen::Matrix<double, 24, 23>::Zero();
-	cov.template block<3, 3>(0, 12) = Eigen::Matrix3d::Identity();
+	cov.template block<3, 3>(0, 12) = Eigen::Matrix3d::Identity();  // 速度对位置的雅克比矩阵
 	vect3 acc_;
-	in.acc.boxminus(acc_, s.ba);
+	in.acc.boxminus(acc_, s.ba);  // acc_ = acc - ba
 	vect3 omega;
-	in.gyro.boxminus(omega, s.bg);
-	cov.template block<3, 3>(12, 3) = -s.rot.toRotationMatrix()*MTK::hat(acc_);
+	in.gyro.boxminus(omega, s.bg);  // omega = gyro - bg
+	// 连续时间IMU模型 v_dot = R * (acc - ba) + g
+	// d(v_dot)/d(theta) = -R * hat(acc)  // v_dot对姿态误差theta的偏导
+	// d(v_dot)/d(ba) = -R                // v_dot对加速度计偏置ba的偏导
+ 	cov.template block<3, 3>(12, 3) = -s.rot.toRotationMatrix()*MTK::hat(acc_);
 	cov.template block<3, 3>(12, 18) = -s.rot.toRotationMatrix();
 	Eigen::Matrix<state_ikfom::scalar, 2, 1> vec = Eigen::Matrix<state_ikfom::scalar, 2, 1>::Zero();
 	Eigen::Matrix<state_ikfom::scalar, 3, 2> grav_matrix;
-	s.S2_Mx(grav_matrix, vec, 21);
+	s.S2_Mx(grav_matrix, vec, 21);  // 对于S2上的向量g，计算d(g)/d(phi)
 	cov.template block<3, 2>(12, 21) =  grav_matrix; 
-	cov.template block<3, 3>(3, 15) = -Eigen::Matrix3d::Identity(); 
+	cov.template block<3, 3>(3, 15) = -Eigen::Matrix3d::Identity();  // 角速度对陀螺仪偏置bg的偏导
 	return cov;
 }
 
-
+// 计算状态转移矩阵f的噪声雅克比矩阵
 Eigen::Matrix<double, 24, 12> df_dw(state_ikfom &s, const input_ikfom &in)
 {
 	Eigen::Matrix<double, 24, 12> cov = Eigen::Matrix<double, 24, 12>::Zero();
-	cov.template block<3, 3>(12, 3) = -s.rot.toRotationMatrix();
-	cov.template block<3, 3>(3, 0) = -Eigen::Matrix3d::Identity();
-	cov.template block<3, 3>(15, 6) = Eigen::Matrix3d::Identity();
-	cov.template block<3, 3>(18, 9) = Eigen::Matrix3d::Identity();
+	cov.template block<3, 3>(12, 3) = -s.rot.toRotationMatrix();  // 加速度对加速度计测量白噪声na的偏导
+	cov.template block<3, 3>(3, 0) = -Eigen::Matrix3d::Identity();  // 角速度对陀螺仪测量白噪声ng的偏导
+	cov.template block<3, 3>(15, 6) = Eigen::Matrix3d::Identity();  // 陀螺仪偏置对陀螺仪偏置随机游走噪声nbg的偏导
+	cov.template block<3, 3>(18, 9) = Eigen::Matrix3d::Identity();  // 加速度计偏置对加速度计偏置随机游走噪声nba的偏导
 	return cov;
 }
 
+// 将SO3上的旋转转换为欧拉角
 vect3 SO3ToEuler(const SO3 &orient) 
 {
 	Eigen::Matrix<double, 3, 1> _ang;
