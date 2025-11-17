@@ -9,6 +9,17 @@ typedef MTK::S2<double, 98090, 10000, 1> S2;
 typedef MTK::vect<1, double> vect1;
 typedef MTK::vect<2, double> vect2;
 
+/*
+ikfom状态的定义:
+位置：3维向量
+旋转：SO3上的旋转，表示旋转
+IMU到Lidar的旋转：SO3上的旋转，表示IMU到Lidar的旋转
+IMU到Lidar的平移：3维向量，表示IMU到Lidar的平移
+速度：3维向量，表示速度
+陀螺仪偏置：3维向量，表示陀螺仪偏置
+加速度计偏置：3维向量，表示加速度计偏置
+重力：流形S2上的向量，2维，表示重力
+*/
 MTK_BUILD_MANIFOLD(state_ikfom,
 ((vect3, pos))
 ((SO3, rot))
@@ -20,11 +31,19 @@ MTK_BUILD_MANIFOLD(state_ikfom,
 ((S2, grav))
 );
 
+// ikfom输入的定义:
+// 加速度：3维向量，表示加速度
+// 陀螺仪：3维向量，表示陀螺仪
 MTK_BUILD_MANIFOLD(input_ikfom,
 ((vect3, acc))
 ((vect3, gyro))
 );
 
+// ikfom过程噪声的定义:
+// ng:陀螺仪测量白噪声
+// na:加速度计测量白噪声
+// nbg:陀螺仪偏置的随机游走噪声
+// nba:加速度计偏置的随机游走噪声
 MTK_BUILD_MANIFOLD(process_noise_ikfom,
 ((vect3, ng))
 ((vect3, na))
@@ -32,6 +51,7 @@ MTK_BUILD_MANIFOLD(process_noise_ikfom,
 ((vect3, nba))
 );
 
+// 初始化过程噪声协方差矩阵
 MTK::get_cov<process_noise_ikfom>::type process_noise_cov()
 {
 	MTK::get_cov<process_noise_ikfom>::type cov = MTK::get_cov<process_noise_ikfom>::type::Zero();
