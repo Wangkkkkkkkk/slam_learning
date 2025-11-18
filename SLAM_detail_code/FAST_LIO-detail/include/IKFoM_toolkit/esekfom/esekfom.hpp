@@ -79,12 +79,12 @@ struct share_datastruct
 template<typename T>
 struct dyn_share_datastruct
 {
-	bool valid;
-	bool converge;
+	bool valid;     // 是否有效
+	bool converge;  // 是否收敛
 	Eigen::Matrix<T, Eigen::Dynamic, 1> z;
-	Eigen::Matrix<T, Eigen::Dynamic, 1> h;
+	Eigen::Matrix<T, Eigen::Dynamic, 1> h;  // 测量值，每行1维，对应点到拟合平面的距离的负数
 	Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> h_v;
-	Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> h_x;
+	Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> h_x;  // 测量雅可比矩阵，每行12维，对应pos(3)平面法向量, rot(3), R_L_I(3), t_L_I(3)
 	Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> R;
 };
 

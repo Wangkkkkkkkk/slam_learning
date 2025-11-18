@@ -174,7 +174,7 @@ void pointBodyToWorld_ikfom(PointType const * const pi, PointType * const po, st
     po->intensity = pi->intensity;
 }
 
-
+// 将点从body坐标系转换到world坐标系，变换链：lidar坐标系 -> IMU坐标系 -> world坐标系
 void pointBodyToWorld(PointType const * const pi, PointType * const po)
 {
     V3D p_body(pi->x, pi->y, pi->z);
@@ -226,6 +226,7 @@ void points_cache_collect()
     // for (int i = 0; i < points_history.size(); i++) _featsArray->push_back(points_history[i]);
 }
 
+// 地图的fov分割：将地图限制在fov范围内
 BoxPointType LocalMap_Points;
 bool Localmap_Initialized = false;
 void lasermap_fov_segment()
@@ -651,12 +652,12 @@ void h_share_model(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_
     #endif
     for (int i = 0; i < feats_down_size; i++)
     {
-        PointType &point_body  = feats_down_body->points[i]; 
-        PointType &point_world = feats_down_world->points[i]; 
+        PointType &point_body  = feats_down_body->points[i];  // body坐标系是lidar坐标系
+        PointType &point_world = feats_down_world->points[i];  // world坐标系是全局坐标系
 
         /* transform to world frame */
         V3D p_body(point_body.x, point_body.y, point_body.z);
-        V3D p_global(s.rot * (s.offset_R_L_I*p_body + s.offset_T_L_I) + s.pos);
+        V3D p_global(s.rot * (s.offset_R_L_I*p_body + s.offset_T_L_I) + s.pos);  // 使用当前状态的tf来将点从body坐标系转换到world坐标系
         point_world.x = p_global(0);
         point_world.y = p_global(1);
         point_world.z = p_global(2);
@@ -666,10 +667,12 @@ void h_share_model(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_
 
         auto &points_near = Nearest_Points[i];
 
+        // ekfom_data.converge是在迭代式更新中是否收敛的标志，只有收敛才进行匹配
         if (ekfom_data.converge)
         {
             /** Find the closest surfaces in the map **/
             ikdtree.Nearest_Search(point_world, NUM_MATCH_POINTS, points_near, pointSearchSqDis);
+            // 如果找到的最近点数小于NUM_MATCH_POINTS，或者最近点距离平方大于5，则认为该点不可用
             point_selected_surf[i] = points_near.size() < NUM_MATCH_POINTS ? false : pointSearchSqDis[NUM_MATCH_POINTS - 1] > 5 ? false : true;
         }
 
@@ -680,6 +683,7 @@ void h_share_model(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_
         if (esti_plane(pabcd, points_near, 0.1f))  // 估计平面参数
         {
             float pd2 = pabcd(0) * point_world.x + pabcd(1) * point_world.y + pabcd(2) * point_world.z + pabcd(3);
+            // s是基于点到拟合平面的残差评分，越接近1表示点越贴近平面，除以sqrt(p_body.norm())是因为远点误差随距离增大，所以做一个补偿
             float s = 1 - 0.9 * fabs(pd2) / sqrt(p_body.norm());
 
             if (s > 0.9)
@@ -702,7 +706,7 @@ void h_share_model(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_
         {
             laserCloudOri->points[effct_feat_num] = feats_down_body->points[i];
             corr_normvect->points[effct_feat_num] = normvec->points[i];
-            total_residual += res_last[i];
+            total_residual += res_last[i];  // 累加残差
             effct_feat_num ++;
         }
     }
@@ -714,13 +718,13 @@ void h_share_model(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_
         return;
     }
 
-    res_mean_last = total_residual / effct_feat_num;
+    res_mean_last = total_residual / effct_feat_num;  // 计算平均残差
     match_time  += omp_get_wtime() - match_start;
     double solve_start_  = omp_get_wtime();
     
     /*** Computation of Measuremnt Jacobian matrix H and measurents vector ***/
-    ekfom_data.h_x = MatrixXd::Zero(effct_feat_num, 12); //23
-    ekfom_data.h.resize(effct_feat_num);
+    ekfom_data.h_x = MatrixXd::Zero(effct_feat_num, 12);  // 设置状态雅克比矩阵维度
+    ekfom_data.h.resize(effct_feat_num);  // 设置测量值维度
 
     for (int i = 0; i < effct_feat_num; i++)
     {
@@ -739,9 +743,10 @@ void h_share_model(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_
         /*** calculate the Measuremnt Jacobian matrix H ***/
         V3D C(s.rot.conjugate() *norm_vec);
         V3D A(point_crossmat * C);
-        if (extrinsic_est_en)
+        if (extrinsic_est_en)  // 如果启用了外参在线估计，则计算外参的雅克比矩阵
         {
             V3D B(point_be_crossmat * s.offset_R_L_I.conjugate() * C); //s.rot.conjugate()*norm_vec);
+            // 启用外参在线估计时，状态雅克比矩阵包含外参的雅可比矩阵，B是外参旋转的导数，C是外参平移的导数
             ekfom_data.h_x.block<1, 12>(i,0) << norm_p.x, norm_p.y, norm_p.z, VEC_FROM_ARRAY(A), VEC_FROM_ARRAY(B), VEC_FROM_ARRAY(C);
         }
         else
@@ -750,7 +755,7 @@ void h_share_model(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_
         }
 
         /*** Measuremnt: distance to the closest surface/corner ***/
-        ekfom_data.h(i) = -norm_p.intensity;
+        ekfom_data.h(i) = -norm_p.intensity;  // 测量值是点到拟合平面的距离的负数
     }
     solve_time += omp_get_wtime() - solve_start_;
 }
